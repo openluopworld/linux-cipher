@@ -746,6 +746,7 @@ static int do_dentry_open(struct file *f,
 	if (error)
 		goto cleanup_all;
 
+	// 调用具体文件系统的open函数
 	if (!open)
 		open = f->f_op->open;
 	if (open) {

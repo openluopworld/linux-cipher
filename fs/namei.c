@@ -3244,6 +3244,7 @@ static int do_last(struct nameidata *nd,
 		goto finish_open;
 	}
 
+	// 不存在时不创建文件，O_CREAT标志为0
 	if (!(open_flag & O_CREAT)) {
 		if (nd->last.name[nd->last.len])
 			nd->flags |= LOOKUP_FOLLOW | LOOKUP_DIRECTORY;
@@ -3270,6 +3271,7 @@ static int do_last(struct nameidata *nd,
 
 		audit_inode(nd->name, dir, LOOKUP_PARENT);
 		/* trailing slashes? */
+		// 怎么能判断最后一个字符是否是slash
 		if (unlikely(nd->last.name[nd->last.len]))
 			return -EISDIR;
 	}
@@ -3285,8 +3287,10 @@ static int do_last(struct nameidata *nd,
 		 */
 	}
 	if (open_flag & O_CREAT)
+		// 写锁，不允许其他进行读或写
 		inode_lock(dir->d_inode);
 	else
+		// 读锁，允许其他进行读
 		inode_lock_shared(dir->d_inode);
 	error = lookup_open(nd, &path, file, op, got_write, opened);
 	if (open_flag & O_CREAT)
@@ -3493,6 +3497,7 @@ static struct file *path_openat(struct nameidata *nd,
 	int opened = 0;
 	int error;
 
+	// 根据文件的具体类型完成一些数据的初始化
 	file = get_empty_filp();
 	if (IS_ERR(file))
 		return file;
@@ -3511,12 +3516,16 @@ static struct file *path_openat(struct nameidata *nd,
 		goto out2;
 	}
 
+	// https://www.win.tue.nl/~aeb/linux/lk/lk-8.html
+	// 'walk'表示什么
+
 	s = path_init(nd, flags);
 	if (IS_ERR(s)) {
 		put_filp(file);
 		return ERR_CAST(s);
 	}
 	while (!(error = link_path_walk(s, nd)) &&
+		// do_lash开始去打开文件
 		(error = do_last(nd, file, op, &opened)) > 0) {
 		nd->flags &= ~(LOOKUP_OPEN|LOOKUP_CREATE|LOOKUP_EXCL);
 		s = trailing_symlink(nd);

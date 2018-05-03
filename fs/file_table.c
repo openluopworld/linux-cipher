@@ -132,9 +132,14 @@ struct file *get_empty_filp(void)
 		return ERR_PTR(error);
 	}
 
+	// f_count取值为什么不是加1
 	atomic_long_set(&f->f_count, 1);
+
+	// 读写锁的初始化
 	rwlock_init(&f->f_owner.lock);
+	// 自旋锁初始化
 	spin_lock_init(&f->f_lock);
+	// 互斥锁初始化
 	mutex_init(&f->f_pos_lock);
 	eventpoll_init_file(f);
 	/* f->f_version: 0 */
