@@ -86,6 +86,11 @@ typedef int (dio_iodone_t)(struct kiocb *iocb, loff_t offset,
 #define MAY_OPEN		0x00000020
 #define MAY_CHDIR		0x00000040
 /* called from RCU mode, don't block */
+/* 阻塞 */
+/*
+深入理解 RCU 实现, http://blog.jobbole.com/106856/
+Linux 2.6内核中新的锁机制--RCU, https://www.ibm.com/developerworks/cn/linux/l-rcu/
+*/
 #define MAY_NOT_BLOCK		0x00000080
 
 /*
