@@ -1493,6 +1493,20 @@ config CRYPTO_SERPENT_AVX2_X86_64
 	  See also:
 	  <http://www.cl.cam.ac.uk/~rja14/serpent.html>
 
+config CRYPTO_RECTANGLE
+	tristate "RECTANGLE a lightweight block cipher"
+	select CRYPTO_ALGAPI
+	help
+	  RECTANGLE is lightweight block cipher
+
+	  It is recommended that RECTANGLE should be used in some embedded
+	  devices where the reference implementation of AES is not fast
+	  enough.
+
+	  Two versions are offered
+	  RECTANGLE-64-80 with 64-bit block size and 80-bit key size
+	  RECTANGLE-64-128 with 64-bit block size and 128-bit key size
+
 config CRYPTO_TEA
 	tristate "TEA, XTEA and XETA cipher algorithms"
 	select CRYPTO_ALGAPI

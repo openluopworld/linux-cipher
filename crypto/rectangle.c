@@ -1,6 +1,21 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  * RECTANGLE: a lightweight block cipher
+ *
+ * Copyright (c) 2018 Luo Peng <luopengxq@gmail.com>
+ *
+ * Reference implementation of block cipher RECTANGLE
+ * The block size of RECTANGLE is 64-bit. It has two versions of keysize,
+ * one is 80-bit, and the other is 128-bit. Both the versions are given
+ * here.
+ *
+ * <RECTANGLE: A Bit-slice Lightweight Block Cipher
+ * Suitable for Multiple Platforms>
+ * https://eprint.iacr.org/2014/084.pdf
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 2 of the License, or (at your option)
+ * any later version.
  *
  */
 
@@ -11,17 +26,34 @@
 #include <linux/init.h>
 #include <linux/module.h>
 
+typedef union rectangle_key80 {
+	u8  k8[RECTANGLE_80_KEY_SIZE];
+	u16 k16[RECTANGLE_80_KEY_SIZE/2];
+} rectangle_key80;
+
+typedef union rectangle_key128 {
+	u8  k8[RECTANGLE_128_KEY_SIZE];
+	u16 k16[RECTANGLE_128_KEY_SIZE/2];
+	u32 k32[RECTANGLE_128_KEY_SIZE/4];
+} rectangle_key128;
+
+static const u8 RC[] = {
+	0x01, 0x02, 0x04, 0x09, 0x12, 0x05, 0x0b, 0x16, 
+	0x0c, 0x19, 0x13, 0x07, 0x0f, 0x1f, 0x1e, 0x1c, 
+	0x18, 0x11, 0x03, 0x06, 0x0d, 0x1b, 0x17, 0x0e, 0x1d,
+};
+
 void crypto_rectangle_encrypt(const struct rectangle_tfm_ctx *ctx,
 			      u8 *out, const u8 *in)
 {
 	u16 sbox0, sbox1;
 	int i;
 
-	u16 *rks16 = (const u16*)ctx->round_keys;
-	u16 w0 = *(const u16*)in;
-	u16 w1 = *((const u16*)in+1);
-	u16 w2 = *((const u16*)in+2);
-	u16 w3 = *((const u16*)in+3);
+	const u16 *rks16 = (const u16*)ctx->round_keys.rk16;
+	u16 w0 = get_unaligned_le16(in);
+	u16 w1 = get_unaligned_le16(in+2);
+	u16 w2 = get_unaligned_le16(in+4);
+	u16 w3 = get_unaligned_le16(in+6);
 
 	for ( i = 0; i < RECTANGLE_ROUNDS; ++i ) {
 		// AddRoundKey
@@ -47,16 +79,14 @@ void crypto_rectangle_encrypt(const struct rectangle_tfm_ctx *ctx,
 		w2 = (w2<<12 | w2 >> 4);
 		w3 = (w3<<13 | w3 >> 3);
 	}
-	// last AddRoundKey
 	w0 ^= *(rks16++);
 	w1 ^= *(rks16++);
 	w2 ^= *(rks16++);
 	w3 ^= *rks16;
-	// out text
-	*(u16*)out     = w0;
-	*((u16*)out+1) = w1;
-	*((u16*)out+2) = w2;
-	*((u16*)out+3) = w3;
+	put_unaligned_le16(w0, out);
+	put_unaligned_le16(w1, out+2);
+	put_unaligned_le16(w2, out+4);
+	put_unaligned_le16(w3, out+6);
 }
 EXPORT_SYMBOL_GPL(crypto_rectangle_encrypt);
 
@@ -71,11 +101,11 @@ void crypto_rectangle_decrypt(const struct rectangle_tfm_ctx *ctx,
 	u16 sbox0, sbox1, sbox2, sbox3;
 	int i;
 
-	const u16 *rks16 = (const u16*)ctx->round_keys;
-	u16 w0 = *(const u16*)in;
-	u16 w1 = *((const u16*)in+1);
-	u16 w2 = *((const u16*)in+2);
-	u16 w3 = *((const u16*)in+3);
+	const u16 *rks16 = (const u16*)ctx->round_keys.rk16;
+	u16 w0 = get_unaligned_le16(in);
+	u16 w1 = get_unaligned_le16(in+2);
+	u16 w2 = get_unaligned_le16(in+4);
+	u16 w3 = get_unaligned_le16(in+6);
 
 	rks16 += 100;
 
@@ -104,16 +134,14 @@ void crypto_rectangle_decrypt(const struct rectangle_tfm_ctx *ctx,
 		sbox1 =  w3 | sbox3;
 		w0    =  sbox0 ^ sbox1;
 	}
-	// last AddRoundKey
 	w0 ^= *rks16;
 	w1 ^= *(rks16+1);
 	w2 ^= *(rks16+2);
 	w3 ^= *(rks16+3);
-	// out text
-	*(u16*)out     = w0;
-	*((u16*)out+1) = w1;
-	*((u16*)out+2) = w2;
-	*((u16*)out+3) = w3;
+	put_unaligned_le16(w0, out);
+	put_unaligned_le16(w1, out+2);
+	put_unaligned_le16(w2, out+4);
+	put_unaligned_le16(w3, out+6);
 }
 EXPORT_SYMBOL_GPL(crypto_rectangle_decrypt);
 
@@ -125,19 +153,19 @@ static void rectangle_decrypt(struct crypto_tfm *tfm, u8 *out, const u8 *in)
 static void rectangle_key_schedule_80(struct rectangle_tfm_ctx *ctx,
 				      const u8 *key)
 {
-	rec_key80 mk;
-	u16 *rks16 = (u16*)ctx->round_keys;
-	u8 sbox0, sbox1;
-	u8 temp[4];
+	rectangle_key80 mk;
+	u16 *rks16 = (u16*)ctx->round_keys.rk16;
+	u8  sbox0, sbox1;
+	u8  temp[4];
 	u16 tempk0;
-	u8 i;
-	u8 count = 0;
+	int i;
+	u8  count = 0;
 
-	rks16[count++] = mk.k16[0] = *((u16*)key);
-	rks16[count++] = mk.k16[1] = *((u16*)key+1);
-	rks16[count++] = mk.k16[2] = *((u16*)key+2);
-	rks16[count++] = mk.k16[3] = *((u16*)key+3);
-	mk.k16[4] = *((u16*)key+4);
+	rks16[count++] = mk.k16[0] = get_unaligned_le16(key);
+	rks16[count++] = mk.k16[1] = get_unaligned_le16(key+2);
+	rks16[count++] = mk.k16[2] = get_unaligned_le16(key+4);
+	rks16[count++] = mk.k16[3] = get_unaligned_le16(key+6);
+	mk.k16[4] = *rks[count-1];
 
 	for ( i = 0; i < RECTANGLE_ROUNDS; ++i ) {
 		temp[0] = mk.k8[0];
@@ -171,7 +199,6 @@ static void rectangle_key_schedule_80(struct rectangle_tfm_ctx *ctx,
 		mk.k16[4] =  tempk0;
 		// round constants
 		mk.k8[0] ^= RC[i];
-		// store round key
 		rks16[count++] = mk.k16[0];
 		rks16[count++] = mk.k16[1];
 		rks16[count++] = mk.k16[2];
@@ -179,21 +206,20 @@ static void rectangle_key_schedule_80(struct rectangle_tfm_ctx *ctx,
 	}
 }
 
-static void rectangle_key_schedule_80(struct rectangle_tfm_ctx *ctx,
+static void rectangle_key_schedule_128(struct rectangle_tfm_ctx *ctx,
 				      const u8 *key)
-	rec_key128 mk;
-	u16 *rks16 = (u16*)ctx->round_keys;
-	u8 sbox0, sbox1;
+	rectangle_key128 mk;
+	u16 *rks16 = (u16*)ctx->round_keys.rk16;
+	u8  sbox0, sbox1;
 	u16 halfRow2;
 	u32 tempRow0;
-	u8 i;
-	u8 count = 0;
+	u8  count = 0;
+	int i;
 
-	mk.k32[0] = *((u32*)key);
-	mk.k32[1] = *((u32*)key+1);
-	mk.k32[2] = *((u32*)key+2);
-	mk.k32[3] = *((u32*)key+3);
-	// the first round
+	mk.k32[0] = get_unaligned_le32(key);
+	mk.k32[1] = get_unaligned_le32(key+4);
+	mk.k32[2] = get_unaligned_le32(key+8);
+	mk.k32[3] = get_unaligned_le32(key+12);
 	rks16[count++] = mk.k16[0];
 	rks16[count++] = mk.k16[2];
 	rks16[count++] = mk.k16[4];
@@ -293,6 +319,6 @@ module_exit(rectangle_module_exit);
 
 MODULE_DESCRIPTION("RECTANGLE block out (generic)");
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("LuoPeng <luopengxq@gmail.com>");
+MODULE_AUTHOR("Luo Peng <luopengxq@gmail.com>");
 MODULE_ALIAS_CRYPTO("rectangle");
 MODULE_ALIAS_CRYPTO("rectangle-generic");

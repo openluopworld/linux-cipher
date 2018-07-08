@@ -1,6 +1,14 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
+ * RECTANGLE: A ligitweight block cipher
+ *
+ * Copyright (c) 2018 Luo Peng <luopengxq@gmail.com>
+ *
  * Common values for the RECTANGLE algorithm
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 2 of the License, or (at your option)
+ * any later version.
  */
 
 #ifndef _CRYPTO_RECTANGLE_H
@@ -15,8 +23,11 @@
 #define RECTANGLE_ROUND_KEY_SIZE (208)
 
 struct rectangle_tfm_ctx {
-	u8  round_keys[RECTANGLE_ROUND_KEY_SIZE];
-	int nrounds;
+	union round_keys {
+		u8  rk8[RECTANGLE_ROUND_KEY_SIZE];
+		u16 rk16[RECTANGLE_ROUND_KEY_SIZE/2];
+		u32 rk32[RECTANGLE_ROUND_KEY_SIZE/4];
+	} round_keys;
 };
 
 void crypto_rectangle_encrypt(const struct rectangle_tfm_ctx *ctx,
