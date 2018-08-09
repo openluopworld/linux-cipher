@@ -269,6 +269,9 @@ static int lookup_all_xattrs(struct inode *inode, struct page *ipage,
 		if (ipage) {
 			inline_addr = inline_xattr_addr(ipage);
 		} else {
+			/* open操作有没有将inode数据信息读到内存中？
+			 * 如果没有则需要在内存中创建对应的镜像，
+			 * 否则直接find即可 */
 			page = get_node_page(sbi, inode->i_ino);
 			if (IS_ERR(page)) {
 				err = PTR_ERR(page);
